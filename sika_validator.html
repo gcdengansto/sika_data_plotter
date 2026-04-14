@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sika Batch Validator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --surface2:  #21262d;
+    --border:    #30363d;
+    --accent:    #e07b54;   /* Sika orange instead of Taipan blue */
+    --accent2:   #3fb950;
+    --warn:      #d29922;
+    --danger:    #f85149;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --pass-bg:   #0d1f12;
+    --fail-bg:   #1f0d0d;
+    --warn-bg:   #1f1a0d;
+    --pass-bdr:  #238636;
+    --fail-bdr:  #da3633;
+    --warn-bdr:  #9e6a03;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    padding: 14px 30px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header .sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+
+  .tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .tab-btn {
+    padding: 9px 22px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-panel { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .tab-panel.active { display: flex; }
+
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    flex: 1;
+    min-height: 0;
+  }
+  .pane {
+    display: flex; flex-direction: column;
+    border-right: 1px solid var(--border);
+    min-height: 0; overflow: hidden;
+  }
+  .pane:last-child { border-right: none; }
+  .pane-header {
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); background: var(--surface);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .pane-header .actions { display: flex; gap: 6px; }
+
+  textarea {
+    flex: 1; background: var(--bg); color: var(--text);
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7;
+    border: none; outline: none; padding: 14px 16px; resize: none; tab-size: 4;
+  }
+  textarea::placeholder { color: var(--muted); opacity: 0.4; }
+
+  .toolbar {
+    padding: 7px 16px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 7px; align-items: center;
+    background: var(--surface); flex-shrink: 0;
+  }
+
+  .btn {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 12px;
+    padding: 5px 12px; border-radius: 5px; border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.15s; letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+  .btn-primary:hover { background: #f09070; }
+  .btn-green { background: #1a3a22; color: #3fb950; border-color: #238636; }
+  .btn-green:hover { background: #238636; color: #fff; }
+  .btn-ghost { background: transparent; color: var(--muted); border-color: var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+  .btn-upload { background: var(--surface2); color: var(--text); border-color: var(--border); }
+  .btn-upload:hover { border-color: var(--accent); color: var(--accent); }
+  #file-input { display: none; }
+
+  #results-area {
+    flex: 1; overflow-y: auto; padding: 10px 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.6;
+  }
+  .summary-bar {
+    padding: 7px 16px; border-top: 1px solid var(--border);
+    background: var(--surface); font-size: 12px;
+    font-family: 'JetBrains Mono', monospace; color: var(--muted);
+    display: flex; gap: 16px; flex-shrink: 0;
+  }
+  .summary-bar .s-pass { color: var(--accent2); font-weight: 700; }
+  .summary-bar .s-fail { color: var(--danger);  font-weight: 700; }
+  .summary-bar .s-warn { color: var(--warn);    font-weight: 700; }
+
+  .result-block { border-radius: 5px; border: 1px solid var(--border); margin-bottom: 5px; overflow: hidden; }
+  .result-block.pass { border-color: var(--pass-bdr); background: var(--pass-bg); }
+  .result-block.fail { border-color: var(--fail-bdr); background: var(--fail-bg); }
+  .result-block.warn { border-color: var(--warn-bdr); background: var(--warn-bg); }
+  .result-block.skip { border-color: var(--border);   background: var(--surface); opacity: 0.6; }
+  .result-row { display: flex; align-items: flex-start; gap: 7px; padding: 5px 9px; }
+  .badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    padding: 2px 6px; border-radius: 3px; flex-shrink: 0; margin-top: 1px;
+    font-family: 'Syne', sans-serif;
+  }
+  .badge.pass { background: #238636; color: #fff; }
+  .badge.fail { background: #da3633; color: #fff; }
+  .badge.warn { background: #9e6a03; color: #fff; }
+  .badge.skip { background: #30363d; color: var(--muted); }
+  .result-line-num { color: var(--muted); font-size: 11px; min-width: 42px; flex-shrink: 0; margin-top: 2px; }
+  .result-content  { flex: 1; min-width: 0; }
+  .result-cmd  { color: var(--text); word-break: break-all; }
+  .result-cmd .cmd-kw    { color: #e07b54; }
+  .result-cmd .cmd-motor { color: #ffa657; }
+  .result-cmd .cmd-num   { color: #56d364; }
+  .result-msg { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .result-block.fail .result-msg { color: #ffa198; }
+  .result-block.warn .result-msg { color: #e3b341; }
+  .result-block.pass .result-msg { color: #56d364; }
+  .section-divider {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); padding: 7px 3px 3px;
+    font-family: 'Syne', sans-serif; font-weight: 700;
+    border-bottom: 1px solid var(--border); margin-bottom: 6px;
+  }
+  .placeholder-msg {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 8px; color: var(--muted);
+    font-family: 'Syne', sans-serif; font-size: 14px; opacity: 0.5;
+  }
+  .placeholder-msg .icon { font-size: 30px; }
+  .stats-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 12px; }
+  .stats-table th {
+    text-align: left; color: var(--muted); font-weight: 600; padding: 3px 6px;
+    border-bottom: 1px solid var(--border); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .stats-table td { padding: 3px 6px; border-bottom: 1px solid #21262d; }
+  .stats-table td.num   { color: #56d364; }
+  .stats-table td.motor { color: #ffa657; }
+
+  /* ── GENERATOR ── */
+  .gen-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr 1fr;
+    flex: 1; min-height: 0;
+  }
+  .gen-form-col {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .gen-form-inner { padding: 16px; }
+  .form-section { margin-bottom: 16px; }
+  .form-section-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 9px; padding-bottom: 5px;
+    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+  }
+  .vary-badge {
+    font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+    background: #3a2010; color: var(--accent); font-family: 'Syne', sans-serif;
+  }
+  .form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .form-row label {
+    font-size: 12px; color: var(--muted); min-width: 80px; flex-shrink: 0; font-weight: 600;
+  }
+  .form-row input, .form-row select {
+    flex: 1; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    outline: none; transition: border-color 0.15s; min-width: 0;
+  }
+  .form-row input:focus, .form-row select:focus { border-color: var(--accent); }
+  .motor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; margin-bottom: 3px; }
+  .motor-cell { display: flex; align-items: center; gap: 5px; }
+  .motor-cell label {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: #ffa657; min-width: 20px; font-weight: 700;
+  }
+  .motor-cell input {
+    flex: 1; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    outline: none; min-width: 0; transition: border-color 0.15s;
+  }
+  .motor-cell input:focus   { border-color: var(--accent); }
+  .motor-cell input.varying { border-color: var(--accent); background: #2a1508; }
+  .gen-btn-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
+  .gen-preview-col {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+  #gen-preview-area {
+    flex: 1; overflow-y: auto; padding: 10px 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.65;
+  }
+  .gen-block {
+    border: 1px solid var(--border); border-radius: 5px;
+    margin-bottom: 7px; overflow: hidden; background: var(--surface);
+  }
+  .gen-block-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 9px; background: var(--surface2); border-bottom: 1px solid var(--border);
+  }
+  .gen-block-num {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    font-family: 'Syne', sans-serif; letter-spacing: 0.06em;
+  }
+  .gen-block-actions { display: flex; gap: 5px; align-items: center; }
+  .gen-block-body { padding: 7px 9px; }
+  .gen-cmd-line { margin-bottom: 1px; }
+  .gen-cmd-line .kw  { color: var(--accent); }
+  .gen-cmd-line .mot { color: #ffa657; }
+  .gen-cmd-line .num { color: #56d364; }
+  .btn-expand {
+    font-size: 10px; padding: 2px 7px;
+    background: var(--surface); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 3px;
+    cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; transition: all 0.12s;
+  }
+  .btn-expand:hover { color: var(--accent); border-color: var(--accent); }
+  .btn-add-pool {
+    font-size: 10px; padding: 2px 7px;
+    background: #0d1f12; color: #3fb950;
+    border: 1px solid #238636; border-radius: 3px;
+    cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; transition: all 0.12s;
+  }
+  .btn-add-pool:hover { background: #238636; color: #fff; }
+  .btn-add-pool.added { background: #238636; color: #fff; pointer-events: none; opacity: 0.8; }
+  .step-table { display: none; margin-top: 7px; border-top: 1px solid var(--border); padding-top: 7px; }
+  .step-table.open { display: block; }
+  .step-table table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .step-table th {
+    text-align: center; color: var(--muted); padding: 2px 5px;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-family: 'Syne', sans-serif; border-bottom: 1px solid var(--border);
+  }
+  .step-table td { text-align: center; padding: 2px 5px; color: #56d364; font-size: 11px; }
+  .step-table tr:nth-child(even) td { background: #161b22; }
+  .gen-pool-col { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  #pool-textarea {
+    flex: 1; background: var(--bg); color: var(--text);
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.7;
+    border: none; outline: none; padding: 14px 16px; resize: none; tab-size: 4; min-height: 0;
+  }
+  .pool-footer {
+    border-top: 1px solid var(--border); padding: 7px 12px;
+    background: var(--surface); display: flex; gap: 7px; flex-shrink: 0;
+    align-items: center; flex-wrap: wrap;
+  }
+  .pool-count { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; flex: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sika <span>Batch Tools</span></h1>
+  <span class="sub">ANSTO · validator &amp; scan generator</span>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('validate')">▶ Validator</button>
+  <button class="tab-btn"        onclick="switchTab('generate')">⊞ Scan Generator</button>
+</div>
+
+<!-- ══════════════════ TAB 1: VALIDATOR ══════════════════ -->
+<div class="tab-panel active" id="tab-validate">
+  <div class="split">
+    <div class="pane">
+      <div class="pane-header">
+        <span>Input Commands</span>
+        <div class="actions">
+          <label for="file-input" class="btn btn-upload">↑ Upload File</label>
+          <input type="file" id="file-input" accept=".txt,.bat,.script,.macro">
+          <button class="btn btn-ghost" onclick="clearInput()">Clear</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="validate()">▶ Validate</button>
+        <button class="btn btn-ghost"   onclick="loadExample()">Load Example</button>
+      </div>
+      <textarea id="input-area" placeholder="Paste Sika batch commands here, or upload a file…"></textarea>
+    </div>
+    <div class="pane">
+      <div class="pane-header">
+        <span>Validation Results</span>
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="clearResults()">Clear</button>
+        </div>
+      </div>
+      <div id="results-area">
+        <div class="placeholder-msg"><span class="icon">⬡</span><span>Paste commands and click Validate</span></div>
+      </div>
+      <div class="summary-bar" id="summary-bar" style="display:none;">
+        <span>Checked: <strong id="s-total">0</strong></span>
+        <span class="s-pass">✔ PASSED: <span id="s-pass">0</span></span>
+        <span class="s-fail">✘ FAILED: <span id="s-fail">0</span></span>
+        <span class="s-warn">⚠ WARNED: <span id="s-warn">0</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ TAB 2: GENERATOR ══════════════════ -->
+<div class="tab-panel" id="tab-generate">
+  <div class="gen-layout">
+
+    <!-- LEFT: Form -->
+    <div class="gen-form-col">
+      <div class="gen-form-inner">
+
+        <div class="form-section">
+          <div class="form-section-title">Sample / Label</div>
+          <div class="form-row">
+            <label>Sample</label>
+            <input type="text" id="g-sample" placeholder="e.g. CeMnO 1.6K">
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Fixed Positions</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5;">
+            Set fixed values for the virtual motors. The <em>varying motor</em> below will override its value each scan.
+          </div>
+          <div class="motor-grid" id="drive-motor-grid">
+            <div class="motor-cell"><label>h</label><input type="number" id="d-h" value="1"   step="any"></div>
+            <div class="motor-cell"><label>k</label><input type="number" id="d-k" value="0"   step="any"></div>
+            <div class="motor-cell"><label>l</label><input type="number" id="d-l" value="0.2" step="any"></div>
+            <div class="motor-cell"><label>e</label><input type="number" id="d-e" value="0"   step="any"></div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Scan Motor</div>
+          <div class="form-row">
+            <label>Motor</label>
+            <select id="g-scan-motor">
+              <option value="h">h</option>
+              <option value="k">k</option>
+              <option value="l">l</option>
+              <option value="e" selected>e</option>
+              <option value="s1">s1</option>
+              <option value="s2">s2</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Start</label>
+            <input type="number" id="g-scan-start" value="-0.2" step="any">
+          </div>
+          <div class="form-row">
+            <label>End</label>
+            <input type="number" id="g-scan-end"   value="1.7"  step="any">
+          </div>
+          <div class="form-row">
+            <label>Step</label>
+            <input type="number" id="g-scan-step"  value="0.1"  step="any">
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Counting (preset)</div>
+          <div class="form-row">
+            <label>Mode</label>
+            <select id="g-count-mode">
+              <option value="count" selected>count</option>
+              <option value="time">time</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Value</label>
+            <input type="number" id="g-count-val" value="1000000" step="any">
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">
+            Varying Motor
+            <span class="vary-badge">SERIES</span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:9px;line-height:1.5;">
+            This motor steps from start to end, generating one scantitle+scan group per step.
+          </div>
+          <div class="form-row">
+            <label>Motor</label>
+            <select id="g-vary-motor" onchange="onVaryMotorChange()">
+              <option value="h">h</option>
+              <option value="k">k</option>
+              <option value="l" selected>l</option>
+              <option value="e">e</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Start</label>
+            <input type="number" id="g-vary-start" value="0.2" step="any">
+          </div>
+          <div class="form-row">
+            <label>End</label>
+            <input type="number" id="g-vary-end"   value="1.0" step="any">
+          </div>
+          <div class="form-row">
+            <label>Step</label>
+            <input type="number" id="g-vary-step"  value="0.2" step="any">
+          </div>
+        </div>
+
+        <div class="gen-btn-row">
+          <button class="btn btn-primary" onclick="generateScans()">⊞ Generate</button>
+          <button class="btn btn-ghost"   onclick="clearGenerated()">Clear</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- MIDDLE: Preview -->
+    <div class="gen-preview-col">
+      <div class="pane-header">
+        <span>Generated Scans</span>
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="addAllToPool()">+ All to Pool</button>
+        </div>
+      </div>
+      <div id="gen-preview-area">
+        <div class="placeholder-msg"><span class="icon">⊞</span><span>Configure and click Generate</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Pool -->
+    <div class="gen-pool-col">
+      <div class="pane-header">
+        <span>Command Pool</span>
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="clearPool()">Clear</button>
+        </div>
+      </div>
+      <textarea id="pool-textarea" placeholder="Approved scans appear here.&#10;&#10;You can also type directly.&#10;Use 'Send to Validator' to check the whole script."></textarea>
+      <div class="pool-footer">
+        <span class="pool-count" id="pool-count">0 lines</span>
+        <button class="btn btn-ghost" onclick="copyPool()">Copy</button>
+        <button class="btn btn-green" onclick="sendPoolToValidator()">→ Validator</button>
+        <button class="btn btn-green" onclick="downloadPool()">↓ Download</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  SIKA MOTOR DEFINITIONS
+// ═══════════════════════════════════════════════════
+
+// Virtual (reciprocal-space) motors
+const VIRTUAL_MOTORS = new Set(['h','k','l','e']);
+
+// Real motors known on Sika
+const REAL_MOTORS = new Set([
+  's1','s2','a1','a2','m1','m2',
+  'sgu','sgl','stu','stl',
+  'tc1','tc2'
+]);
+
+const ALL_MOTORS = new Set([...VIRTUAL_MOTORS, ...REAL_MOTORS]);
+
+// ── Helpers ──────────────────────────────────────────
+function isNum(s)      { return s !== undefined && !isNaN(parseFloat(s)) && isFinite(s); }
+function isLoopVar(s)  { return s !== undefined && /^%\w+$/.test(s); }  // e.g. %i, %temp
+function isNumOrVar(s) { return isNum(s) || isLoopVar(s); }             // accept both in loop context
+function isMotor(s)    { return s !== undefined && ALL_MOTORS.has(s.toLowerCase()); }
+function isVirtual(s)  { return s !== undefined && VIRTUAL_MOTORS.has(s.toLowerCase()); }
+
+function tokenise(line) {
+  const toks = [], re = /\"([^\"]*)\"|\'([^\']*)\'|(\S+)/g; let m;
+  while ((m = re.exec(line)) !== null) toks.push(m[1] ?? m[2] ?? m[3]);
+  return toks;
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmt(n, dp = 6) {
+  let s = parseFloat(n).toFixed(dp);
+  s = s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  return s;
+}
+
+// ═══════════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i===0&&name==='validate') || (i===1&&name==='generate'));
+  });
+  document.getElementById('tab-validate').classList.toggle('active', name === 'validate');
+  document.getElementById('tab-generate').classList.toggle('active', name === 'generate');
+}
+
+// ═══════════════════════════════════════════════════
+//  VALIDATOR — per-command rules
+// ═══════════════════════════════════════════════════
+// drive motor position
+function validateDrive(t) {
+  if (t.length < 3) return { ok: false, msg: 'drive needs: motor position.' };
+  const mName = t[1], pos = t[2];
+  if (!isMotor(mName))
+    return { ok: false, msg: `Unknown motor "${mName}". Known: h k l e s1 s2 a1 a2 m1 m2 …` };
+  if (!isNum(pos))
+    return { ok: false, msg: `Position for "${mName}" not a number: "${pos}".` };
+  return { ok: true, msg: `Drive ${mName} → ${pos}.` };
+}
+
+// loop i=start,stop,step  (values may use spaces around = and ,)
+function validateLoop(t, loopDepth) {
+  // Rejoin and normalise: "loop i = 1.6 , 9 , 0.1" → "i=1.6,9,0.1"
+  const raw = t.slice(1).join('').replace(/\s/g, '');
+  const m = raw.match(/^(\w+)=([^,]+),([^,]+),([^,]+)$/);
+  if (!m)
+    return { ok: false, msg: 'loop syntax: loop var=start,stop,step  (e.g. loop i=1.6,9,0.1).' };
+  const [, varName, start, stop, step] = m;
+  if (!isNum(start)) return { ok: false, msg: `loop start not a number: "${start}".` };
+  if (!isNum(stop))  return { ok: false, msg: `loop stop not a number: "${stop}".` };
+  if (!isNum(step) || parseFloat(step) === 0)
+    return { ok: false, msg: `loop step must be non-zero. Got "${step}".` };
+  const n = Math.round(Math.abs(parseFloat(stop) - parseFloat(start)) / Math.abs(parseFloat(step))) + 1;
+  const nestNote = loopDepth > 0 ? ` (nested, depth ${loopDepth + 1})` : '';
+  return { ok: true, msg: `Loop ${varName} from ${start} to ${stop} step ${step} → ${n} iteration${n!==1?'s':''}${nestNote}.` };
+}
+
+// endloop
+function validateEndloop(loopDepth) {
+  if (loopDepth <= 0)
+    return { ok: false, msg: 'endloop without a matching loop.' };
+  return { ok: true, msg: 'End of loop block.' };
+}
+
+
+// preset count <n>  |  preset time <n>
+function validatePreset(t) {
+  if (t.length < 3) return { ok: false, msg: 'preset needs a mode (count|time) and a value.' };
+  const mode = t[1].toLowerCase(), val = t[2];
+  if (mode !== 'count' && mode !== 'time')
+    return { ok: false, msg: `preset mode must be "count" or "time". Got "${t[1]}".` };
+  if (!isNum(val) || parseFloat(val) <= 0)
+    return { ok: false, msg: `preset value must be positive. Got "${val}".` };
+  return { ok: true, msg: `Preset ${mode} = ${val}.` };
+}
+
+// scantitle "..."  or  scantitle ...
+function validateScantitle(t) {
+  if (t.length < 2) return { ok: 'warn', msg: 'scantitle has no text.' };
+  return { ok: true, msg: `Title: "${t.slice(1).join(' ')}"` };
+}
+
+// wait <seconds>
+function validateWait(t) {
+  if (t.length < 2) return { ok: false, msg: 'wait requires seconds.' };
+  if (!isNum(t[1]) || parseFloat(t[1]) < 0)
+    return { ok: false, msg: `Duration must be ≥ 0. Got "${t[1]}".` };
+  return { ok: true, msg: `Wait ${t[1]} s.` };
+}
+
+// set_temp tc1|tc2 <setpoint> <tolerance> <mode>
+function validateSetTemp(t) {
+  if (t.length < 5) return { ok: false, msg: 'set_temp needs: tc1|tc2  setpoint  tolerance  mode.' };
+  const ctrl = t[1].toLowerCase();
+  if (ctrl !== 'tc1' && ctrl !== 'tc2')
+    return { ok: false, msg: `set_temp controller must be tc1 or tc2. Got "${t[1]}".` };
+  if (!isNumOrVar(t[2])) return { ok: false, msg: `setpoint not a number or loop variable: "${t[2]}".` };
+  if (!isNumOrVar(t[3])) return { ok: false, msg: `tolerance not a number: "${t[3]}".` };
+  return { ok: true, msg: `set_temp ${ctrl}: setpoint=${t[2]} K, tolerance=${t[3]}, mode=${t[4]}.` };
+}
+
+// run mfield <value>
+function validateRun(t) {
+  if (t.length < 3) return { ok: false, msg: 'run needs a subcommand and value (e.g. run mfield 0.75).' };
+  const sub = t[1].toLowerCase();
+  if (sub !== 'mfield')
+    return { ok: 'warn', msg: `Unknown run subcommand "${t[1]}". Expected "mfield".` };
+  if (!isNum(t[2])) return { ok: false, msg: `mfield value not a number: "${t[2]}".` };
+  return { ok: true, msg: `Set magnetic field to ${t[2]} T.` };
+}
+
+// ef <value>  — set constant final energy
+function validateEf(t) {
+  if (t.length < 2) return { ok: false, msg: 'ef requires an energy value in meV.' };
+  if (!isNum(t[1]) || parseFloat(t[1]) <= 0)
+    return { ok: false, msg: `ef value must be positive. Got "${t[1]}".` };
+  return { ok: true, msg: `Constant Ef mode: Ef = ${t[1]} meV.` };
+}
+
+// scan motor1 start stop step [motor2 start stop step …]
+// Special form: scan n=11  |  scan n = 11  |  scan n 11  (no-move scan)
+// At least one motor must actually move (step != 0 or start != stop).
+function validateScan(t) {
+  // ── No-move form: scan n[=]<int> ──────────────────────────
+  // Normalise tokens: join them back and try matching "n = 11" style
+  const raw = t.slice(1).join(' ').replace(/\s*=\s*/g, '=').trim();
+  const noMoveMatch = raw.match(/^n=(\d+)$/i) || raw.match(/^n\s+(\d+)$/i);
+  if (noMoveMatch) {
+    const n = parseInt(noMoveMatch[1]);
+    if (n < 1) return { ok: false, msg: `scan n must be ≥ 1. Got ${n}.` };
+    return { ok: true, msg: `No-move scan: ${n} point${n>1?'s':''} at current position.` };
+  }
+
+  // ── Normal scan: motor start stop step [motor start stop step …] ──
+  const args = t.slice(1);
+  if (args.length < 4) return { ok: false, msg: 'scan needs at least: motor start stop step.' };
+
+  // Parse motor groups (each group = 4 tokens)
+  if (args.length % 4 !== 0)
+    return { ok: false, msg: `scan args must be groups of 4 (motor start stop step). Got ${args.length} arg(s).` };
+
+  const motors = [];
+  for (let i = 0; i < args.length; i += 4) {
+    const [mName, start, stop, step] = args.slice(i, i + 4);
+    if (!isMotor(mName))
+      return { ok: false, msg: `Unknown motor "${mName}". Known: h k l e s1 s2 a1 a2 m1 m2 …` };
+    if (!isNumOrVar(start)) return { ok: false, msg: `start for "${mName}" not a number or loop variable: "${start}".` };
+    if (!isNumOrVar(stop))  return { ok: false, msg: `stop for "${mName}" not a number or loop variable: "${stop}".` };
+    if (!isNumOrVar(step))  return { ok: false, msg: `step for "${mName}" not a number or loop variable: "${step}".` };
+    // Only check step=0 trap when values are literal numbers
+    if (isNum(step) && parseFloat(step) === 0 && isNum(start) && isNum(stop) && parseFloat(start) !== parseFloat(stop))
+      return { ok: false, msg: `step for "${mName}" is 0 but start ≠ stop — infinite loop.` };
+    motors.push({ name: mName, start: parseFloat(start), stop: parseFloat(stop), step: parseFloat(step) });
+  }
+
+  // Find the actually-scanning motor (step ≠ 0 and start ≠ stop)
+  const scanning = motors.filter(m => m.step !== 0 && m.start !== m.stop);
+  if (scanning.length === 0)
+    return { ok: 'warn', msg: 'All motors have step=0 or start=stop — no motor moves.' };
+
+  const fixed   = motors.filter(m => m.step === 0 || m.start === m.stop);
+  const summary = scanning.map(m => {
+    const npts = Math.round(Math.abs(m.stop - m.start) / Math.abs(m.step)) + 1;
+    return `${m.name}: ${m.start}→${m.stop} (${npts} pts, step ${m.step})`;
+  }).join('; ');
+  const fixedStr = fixed.length ? `  Fixed: ${fixed.map(m=>m.name+'='+m.start).join(', ')}` : '';
+
+  return { ok: true, msg: `Scan — ${summary}.${fixedStr}` };
+}
+
+// ═══════════════════════════════════════════════════
+//  MAIN VALIDATE FUNCTION
+// ═══════════════════════════════════════════════════
+function validate() {
+  const lines   = document.getElementById('input-area').value.split('\n');
+  const results = [], scanStats = [];
+  let nPass = 0, nFail = 0, nWarn = 0, nSkip = 0;
+  let currentPreset = null;   // tracks the last preset for scan context
+  let loopDepth = 0;          // tracks nested loop depth
+
+  lines.forEach((rawLine, li) => {
+    const line = rawLine.trim(), lineNum = li + 1;
+
+    if (!line) {
+      results.push({ lineNum, raw: '', status: 'skip', cmd: '', msg: '' });
+      nSkip++; return;
+    }
+    if (line.startsWith('#')) {
+      results.push({ lineNum, raw: line, status: 'skip', cmd: '#', msg: line.slice(1).trim() });
+      nSkip++; return;
+    }
+
+    const t  = tokenise(line);
+    const kw = t[0].toLowerCase();
+    let res;
+
+    switch (kw) {
+      case 'preset':    res = validatePreset(t);           break;
+      case 'scantitle': res = validateScantitle(t);        break;
+      case 'wait':      res = validateWait(t);             break;
+      case 'set_temp':  res = validateSetTemp(t);          break;
+      case 'run':       res = validateRun(t);              break;
+      case 'ef':        res = validateEf(t);               break;
+      case 'drive':     res = validateDrive(t);            break;
+      case 'loop':
+        res = validateLoop(t, loopDepth);
+        if (res.ok === true) loopDepth++;
+        break;
+      case 'endloop':
+        res = validateEndloop(loopDepth);
+        if (res.ok === true) loopDepth--;
+        break;
+      case 'scan': {
+        if (!currentPreset) {
+          res = { ok: 'warn', msg: 'No preset defined before this scan. Add "preset count <n>" or "preset time <n>".' };
+        } else {
+          res = validateScan(t);
+        }
+
+        // Record scan stats if valid
+        if (res.ok === true) {
+          // find scanning motor for stats
+          const args = t.slice(1);
+          const rawArgs = args.join(' ').replace(/\s*=\s*/g, '=').trim();
+          const noMoveM = rawArgs.match(/^n=(\d+)/i) || rawArgs.match(/^n\s+(\d+)/i);
+          if (noMoveM) {
+            scanStats.push({ lineNum, type: 'no-move', motor: '—', start: '—', stop: '—', step: '—', mode: currentPreset?.mode||'?', count: currentPreset?.val||'?' });
+          } else if (args.length >= 4) {
+            // find first motor that actually moves
+            let sm = { name: args[0], start: args[1], stop: args[2], step: args[3] };
+            for (let i = 0; i < args.length; i += 4) {
+              if (parseFloat(args[i+3]) !== 0 && parseFloat(args[i+1]) !== parseFloat(args[i+2])) {
+                sm = { name: args[i], start: args[i+1], stop: args[i+2], step: args[i+3] };
+                break;
+              }
+            }
+            scanStats.push({ lineNum, type: 'scan', motor: sm.name, start: sm.start, stop: sm.stop, step: sm.step, mode: currentPreset?.mode||'?', count: currentPreset?.val||'?' });
+          }
+        }
+        break;
+      }
+      default:
+        res = { ok: 'warn', msg: `Unrecognised command "${t[0]}".` };
+    }
+
+    // Track last valid preset for scan context warning
+    if (kw === 'preset' && res.ok === true)
+      currentPreset = { mode: t[1], val: t[2] };
+
+    const status = res.ok === true ? 'pass' : res.ok === 'warn' ? 'warn' : 'fail';
+    if      (status === 'pass') nPass++;
+    else if (status === 'warn') nWarn++;
+    else                        nFail++;
+    results.push({ lineNum, raw: line, status, cmd: kw, msg: res.msg });
+  });
+
+// Warn if any loop was opened but never closed
+  if (loopDepth > 0) {
+    nWarn++;
+    results.push({
+      lineNum: lines.length,
+      raw: '',
+      status: 'warn',
+      cmd: 'loop',
+      msg: `⚠ ${loopDepth} loop block${loopDepth>1?'s':''} opened but never closed with endloop.`
+    });
+  }
+
+  renderResults(results, nPass, nFail, nWarn, nSkip, scanStats);
+}
+
+// ── Syntax highlighting ───────────────────────────
+function hl(raw) {
+  if (!raw) return '';
+  const t   = tokenise(raw);
+  if (!t.length) return escHtml(raw);
+  const kws = new Set(['scan','preset','scantitle','wait','set_temp','run','ef','count','time','drive','loop','endloop']);
+  return t.map((tok, i) => {
+    const tl = tok.toLowerCase();
+    if (i === 0 || (kws.has(tl) && i > 0)) return `<span class="cmd-kw">${escHtml(tok)}</span>`;
+    if (ALL_MOTORS.has(tl))                 return `<span class="cmd-motor">${escHtml(tok)}</span>`;
+    if (isNum(tok))                         return `<span class="cmd-num">${escHtml(tok)}</span>`;
+    return escHtml(tok);
+  }).join(' ');
+}
+
+// ── Render ────────────────────────────────────────
+function renderResults(results, nPass, nFail, nWarn, nSkip, scanStats) {
+  const area = document.getElementById('results-area');
+  let html = '';
+
+  if      (nFail === 0 && nWarn === 0) html += `<div class="section-divider" style="color:#56d364;border-color:#238636;">✔ All commands passed</div>`;
+  else if (nFail > 0)                  html += `<div class="section-divider" style="color:#f85149;border-color:#da3633;">✘ ${nFail} error(s) found</div>`;
+  else                                 html += `<div class="section-divider" style="color:#e3b341;border-color:#9e6a03;">⚠ Passed with ${nWarn} warning(s)</div>`;
+
+  results.forEach(r => {
+    if (r.status === 'skip' && !r.raw) return;
+    if (r.status === 'skip' && r.cmd === '#') {
+      html += `<div class="result-block skip"><div class="result-row">
+        <span class="result-line-num">L${r.lineNum}</span><span class="badge skip">#</span>
+        <span class="result-content"><span class="result-cmd" style="color:var(--muted);font-style:italic;">${escHtml(r.msg)}</span></span>
+      </div></div>`;
+      return;
+    }
+    const lbl = r.status === 'pass' ? 'PASS' : r.status === 'warn' ? 'WARN' : 'FAIL';
+    html += `<div class="result-block ${r.status}"><div class="result-row">
+      <span class="result-line-num">L${r.lineNum}</span><span class="badge ${r.status}">${lbl}</span>
+      <span class="result-content">
+        <div class="result-cmd">${hl(r.raw)}</div>
+        <div class="result-msg">${escHtml(r.msg)}</div>
+      </span></div></div>`;
+  });
+
+  if (scanStats.length > 0) {
+    html += `<div class="section-divider" style="margin-top:12px;">Scan Summary (${scanStats.length})</div>`;
+    html += `<table class="stats-table"><thead><tr>
+      <th>Line</th><th>Type</th><th>Motor</th><th>Start</th><th>Stop</th><th>Step</th><th>Mode</th><th>Preset</th>
+    </tr></thead><tbody>`;
+    scanStats.forEach(s => {
+      html += `<tr>
+        <td>${s.lineNum}</td>
+        <td style="color:#e07b54">${s.type}</td>
+        <td class="motor">${s.motor}</td>
+        <td class="num">${s.start}</td>
+        <td class="num">${s.stop}</td>
+        <td class="num">${s.step}</td>
+        <td>${s.mode}</td>
+        <td class="num">${s.count}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  area.innerHTML = html;
+  document.getElementById('s-total').textContent = results.length;
+  document.getElementById('s-pass').textContent  = nPass;
+  document.getElementById('s-fail').textContent  = nFail;
+  document.getElementById('s-warn').textContent  = nWarn;
+  document.getElementById('summary-bar').style.display = 'flex';
+}
+
+function clearInput()   { document.getElementById('input-area').value = ''; clearResults(); }
+function clearResults() {
+  document.getElementById('results-area').innerHTML =
+    `<div class="placeholder-msg"><span class="icon">⬡</span><span>Paste commands and click Validate</span></div>`;
+  document.getElementById('summary-bar').style.display = 'none';
+}
+document.getElementById('file-input').addEventListener('change', function () {
+  const file = this.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => { document.getElementById('input-area').value = e.target.result; clearResults(); };
+  r.readAsText(file); this.value = '';
+});
+
+function loadExample() {
+  document.getElementById('input-area').value =
+`# Example Sika batch script
+
+set_temp tc1 1.2 0.5 0
+set_temp tc2 1.2 0.5 0
+wait 240
+
+# Drive a motor to a fixed position
+drive s2 63.2
+
+preset count 1000000
+scantitle "Escan at (1.0 0 0.2) 1.6K"
+scan h 1 k 0 l 0.2 e -0.2 1.7 0.1
+scantitle "Escan at (1.0 0 0.4) 1.6K"
+scan h 1 k 0 l 0.4 e -0.2 1.7 0.1
+
+# Simultaneous h and k scan
+scantitle "diagonal scan"
+scan h 1.5 0.5 0.05 k 0.5 1.5 0.05 l 0 e 2
+
+preset time 120
+scantitle "rocking scan"
+scan s1 35 37 0.1
+
+ef 5
+run mfield 0.75
+scan n=11
+
+# Temperature loop
+loop i=1.6,9,0.1
+set_temp tc1 %i 0.2 0
+set_temp tc2 %i 0.2 0
+wait 300
+scantitle "Q(0 1 0.1667)"
+scan s1 62.35 64.85 0.1
+endloop`;
+  clearResults();
+}
+
+// ═══════════════════════════════════════════════════
+//  GENERATOR
+// ═══════════════════════════════════════════════════
+let generatedScans = [];
+
+function onVaryMotorChange() {
+  const vary = document.getElementById('g-vary-motor').value;
+  ['h','k','l','e'].forEach(m => {
+    const el = document.getElementById('d-' + m);
+    if (el) el.classList.toggle('varying', m === vary);
+  });
+}
+onVaryMotorChange();
+
+function floatRange(start, end, step) {
+  const pts = [];
+  const absStep = Math.abs(step);
+  const sign    = step > 0 ? 1 : -1;
+  const n       = Math.round(Math.abs(end - start) / absStep);
+  for (let i = 0; i <= n; i++) {
+    const v = parseFloat((start + i * sign * absStep).toFixed(10));
+    pts.push(v);
+    if (sign > 0 && v >= end - absStep * 0.01) break;
+    if (sign < 0 && v <= end + absStep * 0.01) break;
+  }
+  if (!pts.length || Math.abs(pts[pts.length - 1] - end) > absStep * 0.01)
+    pts.push(parseFloat(end.toFixed(10)));
+  return pts;
+}
+
+function generateScans() {
+  const sample    = document.getElementById('g-sample').value.trim() || 'sample';
+  const scanMot   = document.getElementById('g-scan-motor').value;
+  const scanStart = parseFloat(document.getElementById('g-scan-start').value);
+  const scanEnd   = parseFloat(document.getElementById('g-scan-end').value);
+  const scanStep  = parseFloat(document.getElementById('g-scan-step').value);
+  const mode      = document.getElementById('g-count-mode').value;
+  const count     = parseFloat(document.getElementById('g-count-val').value);
+  const varyMot   = document.getElementById('g-vary-motor').value;
+  const varyStart = parseFloat(document.getElementById('g-vary-start').value);
+  const varyEnd   = parseFloat(document.getElementById('g-vary-end').value);
+  const varyStep  = parseFloat(document.getElementById('g-vary-step').value);
+
+  const errs = [];
+  if (isNaN(scanStart) || isNaN(scanEnd)) errs.push('Scan start/end must be numbers.');
+  if (isNaN(scanStep)  || scanStep === 0) errs.push('Scan step must be non-zero.');
+  if (isNaN(count)     || count <= 0)     errs.push('Count value must be positive.');
+  if (isNaN(varyStart) || isNaN(varyEnd)) errs.push('Varying motor start/end must be numbers.');
+  if (isNaN(varyStep)  || varyStep === 0) errs.push('Varying motor step must be non-zero.');
+  if (scanMot === varyMot)                errs.push(`Scan motor and varying motor are both "${scanMot}" — they must differ.`);
+  if (errs.length) { alert('Please fix:\n\n' + errs.join('\n')); return; }
+
+  const driveBase = {};
+  ['h','k','l','e'].forEach(m => {
+    driveBase[m] = parseFloat(document.getElementById('d-' + m).value) || 0;
+  });
+
+  const varyValues = floatRange(varyStart, varyEnd, varyStep);
+  generatedScans = [];
+
+  varyValues.forEach((vv, i) => {
+    const fixed = Object.assign({}, driveBase);
+    fixed[varyMot] = vv;
+
+    const titleText = `${sample} - ${scanMot} scan at ${varyMot} = ${fmt(vv)}`;
+
+    // compute step positions
+    const npts  = Math.round(Math.abs(scanEnd - scanStart) / Math.abs(scanStep)) + 1;
+    const steps = [];
+    for (let k = 0; k < npts; k++)
+      steps.push(parseFloat((scanStart + k * (scanEnd - scanStart) / (npts - 1)).toFixed(10)));
+
+    generatedScans.push({ idx: i, titleText, fixed, scanMot, scanStart, scanEnd, scanStep, npts, mode, count, varyMot, varyVal: vv, steps });
+  });
+
+  renderGenerated();
+}
+
+function genCmdHtml(parts) {
+  return parts.map(p => {
+    if (p.t === 'kw')  return `<span class="kw">${escHtml(p.v)}</span>`;
+    if (p.t === 'mot') return `<span class="mot">${escHtml(p.v)}</span>`;
+    if (p.t === 'num') return `<span class="num">${escHtml(p.v)}</span>`;
+    return escHtml(p.v);
+  }).join(' ');
+}
+
+function renderGenerated() {
+  const area = document.getElementById('gen-preview-area');
+  if (!generatedScans.length) {
+    area.innerHTML = `<div class="placeholder-msg"><span class="icon">⊞</span><span>Nothing generated yet</span></div>`;
+    return;
+  }
+
+  let html = `<div class="section-divider" style="color:var(--accent);">${generatedScans.length} scan group${generatedScans.length > 1 ? 's' : ''} · click ▶ Steps to expand</div>`;
+
+  generatedScans.forEach(sc => {
+    // Build the fixed-motor part of the scan command
+    const fixedParts = [];
+    ['h','k','l','e'].forEach(m => {
+      fixedParts.push({ t:'mot', v: m });
+      fixedParts.push({ t:'num', v: fmt(sc.fixed[m]) });
+      // step=0 for fixed motors
+      fixedParts.push({ t:'num', v: '0' });  // will be handled in scanToText
+    });
+
+    // scan line: all motors, scanning motor overrides its fixed value
+    const scanParts = [{ t:'kw', v:'scan' }];
+    ['h','k','l','e'].forEach(m => {
+      if (m === sc.scanMot) {
+        scanParts.push({t:'mot',v:m});
+        scanParts.push({t:'num',v:fmt(sc.scanStart)});
+        scanParts.push({t:'num',v:fmt(sc.scanEnd)});
+        scanParts.push({t:'num',v:fmt(sc.scanStep)});
+      } else {
+        const fv = fmt(sc.fixed[m]);
+        scanParts.push({t:'mot',v:m});
+        scanParts.push({t:'num',v:fv});
+        scanParts.push({t:'num',v:fv});
+        scanParts.push({t:'num',v:'0'});
+      }
+    });
+
+    const stepRows = sc.steps.map((s, k) =>
+      `<tr><td>${k+1}</td><td>${fmt(s)}</td></tr>`
+    ).join('');
+
+    html += `
+    <div class="gen-block" id="gb-${sc.idx}">
+      <div class="gen-block-header">
+        <span class="gen-block-num">
+          SCAN ${sc.idx+1}/${generatedScans.length}
+          &nbsp;·&nbsp;<span style="color:var(--muted);font-weight:400;font-size:10px;">${escHtml(sc.varyMot)} = ${fmt(sc.varyVal)}</span>
+        </span>
+        <div class="gen-block-actions">
+          <button class="btn-expand" id="exp-btn-${sc.idx}" onclick="toggleSteps(${sc.idx})">▶ Steps (${sc.npts})</button>
+          <button class="btn-add-pool" id="add-btn-${sc.idx}" onclick="addToPool(${sc.idx})">+ Pool</button>
+        </div>
+      </div>
+      <div class="gen-block-body">
+        <div class="gen-cmd-line"><span style="color:var(--muted)"># </span>${escHtml(sc.titleText)}</div>
+        <div class="gen-cmd-line">${genCmdHtml([{t:'kw',v:'scantitle'},{t:'txt',v:'"'+sc.titleText+'"'}])}</div>
+        <div class="gen-cmd-line">${genCmdHtml(scanParts)}</div>
+        <div class="step-table" id="steps-${sc.idx}">
+          <table>
+            <thead><tr><th>Pt</th><th>${escHtml(sc.scanMot)} position</th></tr></thead>
+            <tbody>${stepRows}</tbody>
+          </table>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">
+            Step: ${fmt(sc.scanStep)} | ${sc.npts} pts from ${fmt(sc.scanStart)} to ${fmt(sc.scanEnd)}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  area.innerHTML = html;
+}
+
+function toggleSteps(idx) {
+  const el  = document.getElementById(`steps-${idx}`);
+  const btn = document.getElementById(`exp-btn-${idx}`);
+  const open = el.classList.toggle('open');
+  const sc = generatedScans[idx];
+  btn.textContent = open ? `▼ Steps (${sc.npts})` : `▶ Steps (${sc.npts})`;
+}
+
+// Convert a generated scan to text lines for the pool
+function scanToText(sc) {
+  const scanArgs = ['h','k','l','e'].map(m => {
+    if (m === sc.scanMot) return `${m} ${fmt(sc.scanStart)} ${fmt(sc.scanEnd)} ${fmt(sc.scanStep)}`;
+    const fv = fmt(sc.fixed[m]);
+    return `${m} ${fv} ${fv} 0`;
+  }).join('  ');
+  return [
+    `scantitle "${sc.titleText}"`,
+    `scan ${scanArgs}`
+  ].join('\n');
+}
+
+function addToPool(idx) {
+  const sc  = generatedScans[idx];
+  const btn = document.getElementById(`add-btn-${idx}`);
+  const ta  = document.getElementById('pool-textarea');
+  const existing = ta.value.trim();
+  ta.value = (existing ? existing + '\n\n' : '') + scanToText(sc);
+  btn.textContent = '✔ Added';
+  btn.classList.add('added');
+  updatePoolCount();
+}
+
+function addAllToPool() {
+  if (!generatedScans.length) { alert('Generate scans first.'); return; }
+  const ta     = document.getElementById('pool-textarea');
+  const blocks = generatedScans.map(sc => scanToText(sc));
+  const existing = ta.value.trim();
+  ta.value = (existing ? existing + '\n\n' : '') + blocks.join('\n\n');
+  generatedScans.forEach(sc => {
+    const btn = document.getElementById(`add-btn-${sc.idx}`);
+    if (btn) { btn.textContent = '✔ Added'; btn.classList.add('added'); }
+  });
+  updatePoolCount();
+}
+
+function clearGenerated() {
+  generatedScans = [];
+  document.getElementById('gen-preview-area').innerHTML =
+    `<div class="placeholder-msg"><span class="icon">⊞</span><span>Configure and click Generate</span></div>`;
+}
+
+function updatePoolCount() {
+  const ta = document.getElementById('pool-textarea');
+  const n  = ta.value ? ta.value.split('\n').filter(l => l.trim()).length : 0;
+  document.getElementById('pool-count').textContent = `${n} line${n !== 1 ? 's' : ''}`;
+}
+function clearPool() {
+  document.getElementById('pool-textarea').value = '';
+  updatePoolCount();
+  document.querySelectorAll('.btn-add-pool').forEach(b => { b.textContent = '+ Pool'; b.classList.remove('added'); });
+}
+function copyPool() {
+  const ta = document.getElementById('pool-textarea');
+  if (!ta.value.trim()) { alert('Pool is empty.'); return; }
+  navigator.clipboard.writeText(ta.value)
+    .then(() => alert('Copied to clipboard.'))
+    .catch(() => { ta.select(); document.execCommand('copy'); alert('Copied.'); });
+}
+function sendPoolToValidator() {
+  const ta = document.getElementById('pool-textarea');
+  if (!ta.value.trim()) { alert('Pool is empty.'); return; }
+  document.getElementById('input-area').value = ta.value;
+  clearResults();
+  switchTab('validate');
+}
+function downloadPool() {
+  const ta = document.getElementById('pool-textarea');
+  if (!ta.value.trim()) { alert('Pool is empty.'); return; }
+  const url = URL.createObjectURL(new Blob([ta.value], { type: 'text/plain' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'sika_batch.txt'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+document.getElementById('pool-textarea').addEventListener('input', updatePoolCount);
+</script>
+</body>
+</html>
